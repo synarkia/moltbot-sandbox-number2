@@ -16,13 +16,13 @@ export async function findExistingMoltbotProcess(sandbox: Sandbox): Promise<Proc
     for (const proc of processes) {
       // Only match the gateway process, not CLI commands like "clawdbot devices list"
       // Note: CLI is still named "clawdbot" until upstream renames it
-      const isGatewayProcess = 
+      const isGatewayProcess =
         proc.command.includes('start-moltbot.sh') ||
         proc.command.includes('clawdbot gateway');
-      const isCliCommand = 
+      const isCliCommand =
         proc.command.includes('clawdbot devices') ||
         proc.command.includes('clawdbot --version');
-      
+
       if (isGatewayProcess && !isCliCommand) {
         if (proc.status === 'starting' || proc.status === 'running') {
           return proc;
@@ -66,13 +66,14 @@ export async function ensureMoltbotGateway(sandbox: Sandbox, env: MoltbotEnv): P
       console.log('Moltbot gateway is reachable');
       return existingProcess;
     } catch (e) {
-      // Timeout waiting for port - process is likely dead or stuck, kill and restart
-      console.log('Existing process not reachable after full timeout, killing and restarting...');
-      try {
-        await existingProcess.kill();
-      } catch (killError) {
-        console.log('Failed to kill process:', killError);
-      }
+      // Timeout waiting for port - process is likely dead or stuck
+      console.log('Existing process not reachable after timeout.');
+      console.log('DEBUG MODE: NOT killing process so logs can be inspected.');
+      // try {
+      //   await existingProcess.kill();
+      // } catch (killError) {
+      //   console.log('Failed to kill process:', killError);
+      // }
     }
   }
 
@@ -119,6 +120,6 @@ export async function ensureMoltbotGateway(sandbox: Sandbox, env: MoltbotEnv): P
 
   // Verify gateway is actually responding
   console.log('[Gateway] Verifying gateway health...');
-  
+
   return process;
 }

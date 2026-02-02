@@ -73,7 +73,7 @@ debug.get('/processes', async (c) => {
       'completed': 2,
       'failed': 3,
     };
-    
+
     processData.sort((a, b) => {
       const statusA = statusOrder[a.status as string] ?? 99;
       const statusB = statusOrder[b.status as string] ?? 99;
@@ -98,19 +98,19 @@ debug.get('/gateway-api', async (c) => {
   const sandbox = c.get('sandbox');
   const path = c.req.query('path') || '/';
   const MOLTBOT_PORT = 18789;
-  
+
   try {
     const url = `http://localhost:${MOLTBOT_PORT}${path}`;
     const response = await sandbox.containerFetch(new Request(url), MOLTBOT_PORT);
     const contentType = response.headers.get('content-type') || '';
-    
+
     let body: string | object;
     if (contentType.includes('application/json')) {
       body = await response.json();
     } else {
       body = await response.text();
     }
-    
+
     return c.json({
       path,
       status: response.status,
@@ -127,10 +127,10 @@ debug.get('/gateway-api', async (c) => {
 debug.get('/cli', async (c) => {
   const sandbox = c.get('sandbox');
   const cmd = c.req.query('cmd') || 'clawdbot --help';
-  
+
   try {
     const proc = await sandbox.startProcess(cmd);
-    
+
     // Wait longer for command to complete
     let attempts = 0;
     while (attempts < 30) {
@@ -175,12 +175,28 @@ debug.get('/logs', async (c) => {
     } else {
       process = await findExistingMoltbotProcess(sandbox);
       if (!process) {
-        return c.json({
-          status: 'no_process',
-          message: 'No Moltbot process is currently running',
-          stdout: '',
-          stderr: '',
+        // Fallback: Find LATEST process even if failed/exited/completed
+        // This allows us to see logs for crashed containers
+        const allProcs = await sandbox.listProcesses();
+        const gatewayProcs = allProcs.filter(p => p.command.includes('start-moltbot.sh'));
+
+        // Sort by startTime descending (newest first)
+        gatewayProcs.sort((a, b) => {
+          const timeA = a.startTime ? new Date(a.startTime).getTime() : 0;
+          const timeB = b.startTime ? new Date(b.startTime).getTime() : 0;
+          return timeB - timeA;
         });
+
+        if (gatewayProcs.length > 0) {
+          process = gatewayProcs[0];
+        } else {
+          return c.json({
+            status: 'no_process',
+            message: 'No Moltbot process found (running or failed)',
+            stdout: '',
+            stderr: '',
+          });
+        }
       }
     }
 
@@ -203,12 +219,32 @@ debug.get('/logs', async (c) => {
   }
 });
 
+// GET /debug/file - Read an arbitrary file from the container
+debug.get('/file', async (c) => {
+  const sandbox = c.get('sandbox');
+  const path = c.req.query('path') || '/var/log/clawdbot.log';
+
+  try {
+    const proc = await sandbox.startProcess(`cat ${path}`);
+    await new Promise(r => setTimeout(r, 500));
+    const logs = await proc.getLogs();
+
+    return c.json({
+      path,
+      exists: proc.exitCode === 0,
+      content: logs.stdout || logs.stderr || '',
+    });
+  } catch (error) {
+    return c.json({ error: String(error) }, 500);
+  }
+});
+
 // GET /debug/ws-test - Interactive WebSocket debug page
 debug.get('/ws-test', async (c) => {
   const host = c.req.header('host') || 'localhost';
   const protocol = c.req.header('x-forwarded-proto') || 'https';
   const wsProtocol = protocol === 'https' ? 'wss' : 'ws';
-  
+
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -332,7 +368,7 @@ debug.get('/ws-test', async (c) => {
   </script>
 </body>
 </html>`;
-  
+
   return c.html(html);
 });
 
@@ -356,10 +392,10 @@ debug.get('/env', async (c) => {
 // GET /debug/container-config - Read the moltbot config from inside the container
 debug.get('/container-config', async (c) => {
   const sandbox = c.get('sandbox');
-  
+
   try {
     const proc = await sandbox.startProcess('cat /root/.clawdbot/clawdbot.json');
-    
+
     let attempts = 0;
     while (attempts < 10) {
       await new Promise(r => setTimeout(r, 200));
@@ -370,14 +406,14 @@ debug.get('/container-config', async (c) => {
     const logs = await proc.getLogs();
     const stdout = logs.stdout || '';
     const stderr = logs.stderr || '';
-    
+
     let config = null;
     try {
       config = JSON.parse(stdout);
     } catch {
       // Not valid JSON
     }
-    
+
     return c.json({
       status: proc.status,
       exitCode: proc.exitCode,

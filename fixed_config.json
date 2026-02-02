@@ -1,0 +1,27 @@
+{
+    "agents": {
+        "defaults": {
+            "workspace": "/root/clawd",
+            "model": {
+                "primary": "anthropic/claude-opus-4-5"
+            }
+        }
+    },
+    "gateway": {
+        "port": 18789,
+        "mode": "local",
+        "trustedProxies": [
+            "10.1.0.0"
+        ],
+        "auth": {
+            "token": "63355e2048c7d88cae3a2a7ef1489c531ae6fedf50e4b4d22b4fb1da08da7720"
+        }
+    },
+    "channels": {
+        "telegram": {
+            "botToken": "8354220945:AAEThqvnoPSEYkWN7LWnH5liPrVzLU9k7s4",
+            "enabled": true,
+            "dmPolicy": "pairing"
+        }
+    }
+}
